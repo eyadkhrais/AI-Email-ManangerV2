@@ -17,6 +17,18 @@ interface Email {
   received_at: string;
   is_read: boolean;
   requires_response: boolean;
+  drafts?: Draft[];
+}
+
+interface Draft {
+  id: string;
+  email_id: string;
+  subject: string;
+  body_text: string;
+  body_html: string;
+  is_approved: boolean;
+  is_sent: boolean;
+  created_at: string;
 }
 
 export default function Dashboard() {
@@ -28,6 +40,8 @@ export default function Dashboard() {
   const [connectingGmail, setConnectingGmail] = useState(false);
   const [emails, setEmails] = useState<Email[]>([]);
   const [fetchingEmails, setFetchingEmails] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -118,12 +132,73 @@ export default function Dashboard() {
       }
       
       if (data.emails) {
-        setEmails(data.emails);
+        // Fetch drafts for each email
+        const emailsWithDrafts = await Promise.all(
+          data.emails.map(async (email: Email) => {
+            const { data: drafts } = await supabase
+              .from('drafts')
+              .select('*')
+              .eq('email_id', email.id)
+              .order('created_at', { ascending: false });
+            
+            return {
+              ...email,
+              drafts: drafts || [],
+            };
+          })
+        );
+        
+        setEmails(emailsWithDrafts);
       }
     } catch (error: any) {
       setError(error.message || 'Failed to fetch emails');
     } finally {
       setFetchingEmails(false);
+    }
+  };
+
+  const handleGenerateDraft = async (email: Email) => {
+    setError(null);
+    setGeneratingDraft(true);
+    setSelectedEmail(email);
+    
+    try {
+      // Call the API to generate a draft reply
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          emailId: email.id,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      if (data.draft) {
+        // Update the emails state with the new draft
+        setEmails(prevEmails => 
+          prevEmails.map(prevEmail => 
+            prevEmail.id === email.id
+              ? {
+                  ...prevEmail,
+                  drafts: [data.draft, ...(prevEmail.drafts || [])],
+                }
+              : prevEmail
+          )
+        );
+        
+        setSuccess('Draft generated successfully');
+      }
+    } catch (error: any) {
+      setError(error.message || 'Failed to generate draft');
+    } finally {
+      setGeneratingDraft(false);
     }
   };
 
@@ -229,51 +304,76 @@ export default function Dashboard() {
           <h2 className="text-lg font-medium text-gray-900 mb-4">Your Emails</h2>
           {gmailConnected ? (
             emails.length > 0 ? (
-              <div className="overflow-hidden border border-gray-200 rounded-md">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        From
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Subject
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {emails.map((email) => (
-                      <tr key={email.id} className={email.is_read ? '' : 'font-semibold bg-blue-50'}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {email.from_name || email.from_email}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {email.subject}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(email.received_at)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {email.requires_response ? (
+              <div className="space-y-6">
+                {emails.map((email) => (
+                  <div key={email.id} className="border rounded-lg overflow-hidden">
+                    {/* Email Header */}
+                    <div className={`p-4 ${email.is_read ? 'bg-white' : 'bg-blue-50'}`}>
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-900">{email.subject}</h3>
+                          <p className="text-sm text-gray-600">
+                            From: {email.from_name || email.from_email} &lt;{email.from_email}&gt;
+                          </p>
+                          <p className="text-sm text-gray-500">{formatDate(email.received_at)}</p>
+                        </div>
+                        <div>
+                          {email.requires_response && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                               Needs Response
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              No Action Needed
-                            </span>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Email Body */}
+                    <div className="border-t border-gray-200 p-4">
+                      <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: email.body_html || `<p>${email.body_text}</p>` }} />
+                    </div>
+                    
+                    {/* Draft Replies */}
+                    {email.drafts && email.drafts.length > 0 ? (
+                      <div className="border-t border-gray-200 p-4 bg-gray-50">
+                        <h4 className="text-md font-medium text-gray-900 mb-2">AI-Generated Draft Reply</h4>
+                        <div className="bg-white border border-gray-200 rounded-md p-4">
+                          <p className="whitespace-pre-wrap">{email.drafts[0].body_text}</p>
+                        </div>
+                        <div className="mt-4 flex justify-end space-x-2">
+                          <button className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Edit
+                          </button>
+                          <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            Send
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-t border-gray-200 p-4 bg-gray-50">
+                        <div className="flex justify-between items-center">
+                          <p className="text-sm text-gray-600">No draft replies yet</p>
+                          <button
+                            onClick={() => handleGenerateDraft(email)}
+                            disabled={generatingDraft && selectedEmail?.id === email.id}
+                            className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {generatingDraft && selectedEmail?.id === email.id ? (
+                              <>
+                                <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Generating...
+                              </>
+                            ) : (
+                              'Generate AI Reply'
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : fetchingEmails ? (
               <div className="flex justify-center items-center h-40">
