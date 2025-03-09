@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { createBrowserClient } from '@supabase/ssr';
 
 export default function Signup() {
   const [email, setEmail] = useState('');
@@ -13,6 +13,11 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const router = useRouter();
+
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +62,10 @@ export default function Signup() {
         provider: 'google',
         options: {
           redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
           scopes: 'email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send',
         },
       });

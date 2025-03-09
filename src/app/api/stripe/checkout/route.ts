@@ -1,30 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 import { createCheckoutSession, createCustomer } from '@/lib/stripe/client';
-import { cookies } from 'next/headers';
+import { createCookieOptions } from '@/lib/supabase/cookies';
 
 // Premium plan price ID
 const PREMIUM_PRICE_ID = 'price_1OqXXXXXXXXXXXXXXXXXXXXX'; // Replace with your actual price ID
 
 export async function POST(request: NextRequest) {
   try {
+    const { cookies, response } = createCookieOptions();
+
     // Create a Supabase client for server-side usage
-    const cookieStore = cookies();
-    const supabase = createClient(
+    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false,
-        },
-        global: {
-          headers: {
-            Cookie: cookieStore.toString(),
-          },
-        },
-      }
+      { cookies }
     );
     
     // Get the current user
@@ -81,8 +71,12 @@ export async function POST(request: NextRequest) {
       `${process.env.NEXT_PUBLIC_APP_URL}/billing?canceled=true`
     );
     
-    // Return the checkout URL
-    return NextResponse.json({ url: session.url });
+    // Return the checkout URL with any Set-Cookie headers
+    const jsonResponse = NextResponse.json({ url: session.url });
+    response.cookies.getAll().forEach(cookie => {
+      jsonResponse.cookies.set(cookie);
+    });
+    return jsonResponse;
   } catch (error: any) {
     console.error('Error creating checkout session:', error);
     return NextResponse.json(

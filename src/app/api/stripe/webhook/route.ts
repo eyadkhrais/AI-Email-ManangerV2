@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 import { stripe } from '@/lib/stripe/client';
+import { createCookieOptions } from '@/lib/supabase/cookies';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,10 +32,13 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    const { cookies, response } = createCookieOptions();
+    
     // Create a Supabase client
-    const supabase = createClient(
+    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies }
     );
     
     // Handle the event
@@ -100,7 +104,12 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    return NextResponse.json({ received: true });
+    // Return success response with any Set-Cookie headers
+    const jsonResponse = NextResponse.json({ received: true });
+    response.cookies.getAll().forEach(cookie => {
+      jsonResponse.cookies.set(cookie);
+    });
+    return jsonResponse;
   } catch (error: any) {
     console.error('Error handling webhook:', error);
     return NextResponse.json(

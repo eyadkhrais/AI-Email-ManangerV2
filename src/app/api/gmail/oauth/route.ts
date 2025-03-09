@@ -1,27 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getAuthUrl } from '@/lib/gmail/gmailClient';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createServerClient } from '@supabase/ssr';
+import { createCookieOptions } from '@/lib/supabase/cookies';
 
 export async function GET() {
   try {
-    // Create a Supabase client for server-side usage
-    const cookieStore = cookies();
-    const supabase = createClient(
+    const { cookies, response } = createCookieOptions();
+
+    // Create a Supabase client with proper cookie handling
+    const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false,
-        },
-        global: {
-          headers: {
-            Cookie: cookieStore.toString(),
-          },
-        },
-      }
+      { cookies }
     );
     
     const { data: { user } } = await supabase.auth.getUser();
@@ -36,8 +26,12 @@ export async function GET() {
     // Generate the authorization URL
     const authUrl = getAuthUrl();
     
-    // Return the authorization URL
-    return NextResponse.json({ authUrl });
+    // Return the authorization URL with any cookies that were set
+    const jsonResponse = NextResponse.json({ authUrl });
+    response.cookies.getAll().forEach(cookie => {
+      jsonResponse.cookies.set(cookie);
+    });
+    return jsonResponse;
   } catch (error: any) {
     console.error('Error initiating Gmail OAuth:', error);
     return NextResponse.json(

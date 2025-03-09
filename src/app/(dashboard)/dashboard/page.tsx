@@ -53,8 +53,8 @@ export default function Dashboard() {
   const [editingDraft, setEditingDraft] = useState<Draft | null>(null);
   const [sendingDraft, setSendingDraft] = useState<string | null>(null);
   const [isPremium, setIsPremium] = useState(false);
-  const [emailsUsedToday, setEmailsUsedToday] = useState(0);
-  const [draftsUsedToday, setDraftsUsedToday] = useState(0);
+  const [emailsProcessed, setEmailsProcessed] = useState(0);
+  const [draftsGenerated, setDraftsGenerated] = useState(0);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -95,9 +95,9 @@ export default function Dashboard() {
           // Fetch emails if Gmail is connected
           fetchUserEmails();
         }
-        
-        // Check if user has premium subscription
-        const { data: subscription, error: subscriptionError } = await supabase
+
+        // Check if user has an active subscription
+        const { data: subscription } = await supabase
           .from('subscriptions')
           .select('*')
           .eq('user_id', user.id)
@@ -105,9 +105,9 @@ export default function Dashboard() {
           .single();
         
         setIsPremium(!!subscription);
-        
-        // Get usage for today
-        await fetchTodayUsage(user.id);
+
+        // Fetch usage statistics
+        fetchTodayUsage(user.id);
       }
       
       setLoading(false);
@@ -122,32 +122,24 @@ export default function Dashboard() {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       
-      // Fetch emails fetched today
-      const { count: emailCount, error: emailError } = await supabase
+      // Fetch emails processed count
+      const { count: emailCount } = await supabase
         .from('emails')
-        .select('id', { count: 'exact', head: false })
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
         .gte('created_at', today.toISOString());
       
-      if (emailError) {
-        throw emailError;
-      }
-      
-      // Fetch drafts generated today
-      const { count: draftCount, error: draftError } = await supabase
+      // Fetch drafts generated count
+      const { count: draftCount } = await supabase
         .from('drafts')
-        .select('id', { count: 'exact', head: false })
+        .select('*', { count: 'exact', head: true })
         .eq('user_id', userId)
         .gte('created_at', today.toISOString());
       
-      if (draftError) {
-        throw draftError;
-      }
-      
-      setEmailsUsedToday(emailCount || 0);
-      setDraftsUsedToday(draftCount || 0);
+      setEmailsProcessed(emailCount || 0);
+      setDraftsGenerated(draftCount || 0);
     } catch (error) {
-      console.error('Error fetching usage:', error);
+      console.error('Error fetching usage statistics:', error);
     }
   };
 
@@ -184,11 +176,6 @@ export default function Dashboard() {
     setError(null);
     
     try {
-      // Check if user has reached the free tier limit
-      if (!isPremium && emailsUsedToday >= FREE_TIER_LIMITS.emailsPerDay) {
-        throw new Error('You have reached your daily limit for email fetching. Upgrade to Premium for unlimited access.');
-      }
-      
       // Call the API to fetch emails
       const response = await fetch('/api/emails/fetch');
       const data = await response.json();
@@ -215,11 +202,11 @@ export default function Dashboard() {
         );
         
         setEmails(emailsWithDrafts);
-        
-        // Update usage counts
-        if (user) {
-          await fetchTodayUsage(user.id);
-        }
+      }
+
+      // Update usage statistics
+      if (user) {
+        fetchTodayUsage(user.id);
       }
     } catch (error: any) {
       setError(error.message || 'Failed to fetch emails');
@@ -235,7 +222,7 @@ export default function Dashboard() {
     
     try {
       // Check if user has reached the free tier limit
-      if (!isPremium && draftsUsedToday >= FREE_TIER_LIMITS.draftsPerDay) {
+      if (!isPremium && draftsGenerated >= 10) {
         throw new Error('You have reached your daily limit for AI draft generation. Upgrade to Premium for unlimited access.');
       }
       
@@ -271,9 +258,9 @@ export default function Dashboard() {
         
         setSuccess('Draft generated successfully');
         
-        // Update usage counts
+        // Update usage statistics
         if (user) {
-          await fetchTodayUsage(user.id);
+          fetchTodayUsage(user.id);
         }
       }
     } catch (error: any) {
@@ -399,10 +386,12 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Usage Limits (only for free tier) */}
-        {user && !isPremium && (
-          <UsageLimits userId={user.id} isPremium={isPremium} />
-        )}
+        {/* Usage Limits */}
+        <UsageLimits 
+          isPremium={isPremium}
+          emailsProcessed={emailsProcessed}
+          draftsGenerated={draftsGenerated}
+        />
 
         {/* Gmail Connection Status */}
         <div className="bg-white shadow rounded-lg p-6 mb-8">
@@ -417,7 +406,7 @@ export default function Dashboard() {
               </div>
               <button
                 onClick={fetchUserEmails}
-                disabled={fetchingEmails || (!isPremium && emailsUsedToday >= FREE_TIER_LIMITS.emailsPerDay)}
+                disabled={fetchingEmails}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {fetchingEmails ? (
@@ -530,10 +519,7 @@ export default function Dashboard() {
                           <p className="text-sm text-gray-600">No draft replies yet</p>
                           <button
                             onClick={() => handleGenerateDraft(email)}
-                            disabled={
-                              generatingDraft && selectedEmail?.id === email.id || 
-                              (!isPremium && draftsUsedToday >= FREE_TIER_LIMITS.draftsPerDay)
-                            }
+                            disabled={generatingDraft && selectedEmail?.id === email.id || (!isPremium && draftsGenerated >= 10)}
                             className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {generatingDraft && selectedEmail?.id === email.id ? (
@@ -549,6 +535,11 @@ export default function Dashboard() {
                             )}
                           </button>
                         </div>
+                        {!isPremium && draftsGenerated >= 10 && (
+                          <p className="mt-2 text-xs text-red-600">
+                            You've reached your daily limit for AI draft generation. Upgrade to Premium for unlimited access.
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
