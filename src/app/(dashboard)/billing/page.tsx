@@ -1,23 +1,56 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
+
+interface Subscription {
+  id: string;
+  user_id: string;
+  stripe_customer_id: string;
+  stripe_subscription_id: string;
+  status: string;
+  price_id: string;
+  quantity: number;
+  cancel_at_period_end: boolean;
+  current_period_start: number;
+  current_period_end: number;
+  created_at: string;
+  updated_at: string;
+}
 
 export default function Billing() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
+  const [managingSubscription, setManagingSubscription] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Check for success or canceled parameters in the URL
+    const successParam = searchParams.get('success');
+    const canceledParam = searchParams.get('canceled');
+    
+    if (successParam === 'true') {
+      setSuccess('Your subscription has been processed successfully');
+    }
+    
+    if (canceledParam === 'true') {
+      setError('Subscription checkout was canceled');
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
       
       if (user) {
-        setUser(user);
-        
         // Fetch user subscription from Supabase
         const { data, error } = await supabase
           .from('subscriptions')
@@ -38,26 +71,70 @@ export default function Billing() {
 
   const handleSubscribe = async () => {
     setError(null);
-    setMessage(null);
+    setSuccess(null);
+    setSubscribing(true);
     
     try {
-      // This is a placeholder - we'll implement Stripe checkout in Step 8
-      alert('Stripe checkout will be implemented in Step 8');
+      // Call the API to create a checkout session
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      if (data.url) {
+        // Redirect to the checkout URL
+        window.location.href = data.url;
+      } else {
+        throw new Error('Failed to create checkout session');
+      }
     } catch (error: any) {
-      setError(error.message || 'An error occurred while processing your subscription');
+      setError(error.message || 'Failed to process subscription');
+      setSubscribing(false);
     }
   };
 
   const handleManageSubscription = async () => {
     setError(null);
-    setMessage(null);
+    setSuccess(null);
+    setManagingSubscription(true);
     
     try {
-      // This is a placeholder - we'll implement Stripe customer portal in Step 8
-      alert('Stripe customer portal will be implemented in Step 8');
+      // Call the API to create a customer portal session
+      const response = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      if (data.url) {
+        // Redirect to the portal URL
+        window.location.href = data.url;
+      } else {
+        throw new Error('Failed to create customer portal session');
+      }
     } catch (error: any) {
-      setError(error.message || 'An error occurred while managing your subscription');
+      setError(error.message || 'Failed to access subscription management');
+      setManagingSubscription(false);
     }
+  };
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp * 1000).toLocaleDateString();
   };
 
   if (loading) {
@@ -75,40 +152,43 @@ export default function Billing() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Success Message */}
+        {success && (
+          <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-green-700">{success}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Subscription Management */}
         <div className="bg-white shadow rounded-lg p-6">
           <h2 className="text-lg font-medium text-gray-900 mb-6">Subscription Management</h2>
           
-          {error && (
-            <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-red-700">{error}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {message && (
-            <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm text-green-700">{message}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {subscription ? (
+          {subscription && subscription.status === 'active' ? (
             <div>
               <div className="bg-gray-50 p-4 rounded-md mb-6">
                 <h3 className="text-md font-medium text-gray-900 mb-2">Current Plan</h3>
@@ -118,8 +198,13 @@ export default function Billing() {
                       <span className="font-medium">Premium Plan</span> - $9.99/month
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      Next billing date: {new Date(subscription.current_period_end * 1000).toLocaleDateString()}
+                      Next billing date: {formatDate(subscription.current_period_end)}
                     </p>
+                    {subscription.cancel_at_period_end && (
+                      <p className="text-xs text-orange-500 mt-1">
+                        Your subscription will end on {formatDate(subscription.current_period_end)}
+                      </p>
+                    )}
                   </div>
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                     Active
@@ -130,9 +215,10 @@ export default function Billing() {
               <div className="flex justify-end">
                 <button
                   onClick={handleManageSubscription}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={managingSubscription}
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Manage Subscription
+                  {managingSubscription ? 'Loading...' : 'Manage Subscription'}
                 </button>
               </div>
             </div>
@@ -172,9 +258,10 @@ export default function Billing() {
               <div className="flex justify-center">
                 <button
                   onClick={handleSubscribe}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  disabled={subscribing}
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Subscribe Now
+                  {subscribing ? 'Processing...' : 'Subscribe Now'}
                 </button>
               </div>
             </div>
