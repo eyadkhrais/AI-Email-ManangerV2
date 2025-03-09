@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
+import DraftEditor from '@/components/dashboard/DraftEditor';
 
 interface Email {
   id: string;
@@ -42,6 +43,8 @@ export default function Dashboard() {
   const [fetchingEmails, setFetchingEmails] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<Email | null>(null);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<Draft | null>(null);
+  const [sendingDraft, setSendingDraft] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -202,6 +205,70 @@ export default function Dashboard() {
     }
   };
 
+  const handleEditDraft = (draft: Draft) => {
+    setEditingDraft(draft);
+  };
+
+  const handleSaveDraft = (updatedDraft: Draft) => {
+    // Update the emails state with the updated draft
+    setEmails(prevEmails => 
+      prevEmails.map(prevEmail => 
+        prevEmail.id === updatedDraft.email_id
+          ? {
+              ...prevEmail,
+              drafts: prevEmail.drafts?.map(draft => 
+                draft.id === updatedDraft.id ? updatedDraft : draft
+              ),
+            }
+          : prevEmail
+      )
+    );
+    
+    setSuccess('Draft updated successfully');
+  };
+
+  const handleSendDraft = async (draftId: string) => {
+    setError(null);
+    setSendingDraft(draftId);
+    
+    try {
+      // Call the API to send the draft
+      const response = await fetch('/api/emails/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          draftId,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Update the emails state to mark the draft as sent
+      setEmails(prevEmails => 
+        prevEmails.map(prevEmail => ({
+          ...prevEmail,
+          drafts: prevEmail.drafts?.map(draft => 
+            draft.id === draftId
+              ? { ...draft, is_sent: true, is_approved: true }
+              : draft
+          ),
+        }))
+      );
+      
+      setSuccess('Email sent successfully');
+    } catch (error: any) {
+      setError(error.message || 'Failed to send email');
+    } finally {
+      setSendingDraft(null);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
@@ -340,12 +407,38 @@ export default function Dashboard() {
                           <p className="whitespace-pre-wrap">{email.drafts[0].body_text}</p>
                         </div>
                         <div className="mt-4 flex justify-end space-x-2">
-                          <button className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                            Edit
-                          </button>
-                          <button className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                            Send
-                          </button>
+                          {!email.drafts[0].is_sent && (
+                            <>
+                              <button
+                                onClick={() => handleEditDraft(email.drafts![0])}
+                                className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleSendDraft(email.drafts![0].id)}
+                                disabled={sendingDraft === email.drafts![0].id}
+                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {sendingDraft === email.drafts![0].id ? (
+                                  <>
+                                    <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Sending...
+                                  </>
+                                ) : (
+                                  'Send'
+                                )}
+                              </button>
+                            </>
+                          )}
+                          {email.drafts[0].is_sent && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Sent
+                            </span>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -392,6 +485,15 @@ export default function Dashboard() {
           )}
         </div>
       </main>
+
+      {/* Draft Editor Modal */}
+      {editingDraft && (
+        <DraftEditor
+          draft={editingDraft}
+          onClose={() => setEditingDraft(null)}
+          onSave={handleSaveDraft}
+        />
+      )}
     </div>
   );
 } 
