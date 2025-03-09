@@ -2,10 +2,18 @@ import { google } from 'googleapis';
 
 // Create a new OAuth2 client
 export const createOAuth2Client = () => {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+  
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error('Missing Google OAuth credentials');
+  }
+  
   return new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+    clientId,
+    clientSecret,
+    redirectUri
   );
 };
 

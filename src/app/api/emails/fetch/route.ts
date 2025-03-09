@@ -1,13 +1,27 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { fetchEmails } from '@/lib/gmail/emailFetcher';
+import { cookies } from 'next/headers';
 
 export async function GET() {
   try {
-    // Create a Supabase client
+    // Create a Supabase client for server-side usage
+    const cookieStore = cookies();
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+        global: {
+          headers: {
+            Cookie: cookieStore.toString(),
+          },
+        },
+      }
     );
     
     // Get the current user

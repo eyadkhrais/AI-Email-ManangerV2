@@ -1,5 +1,5 @@
 import { createGmailClient, refreshAccessToken } from './gmailClient';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 // Decode base64 encoded email content
 const decodeBase64 = (data: string) => {
@@ -81,6 +81,12 @@ const requiresResponse = (email: any) => {
 // Fetch emails from Gmail
 export const fetchEmails = async (userId: string, maxResults = 10) => {
   try {
+    // Create a Supabase client
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
     // Get the user's Gmail tokens
     const { data: tokensData, error: tokensError } = await supabase
       .from('gmail_tokens')

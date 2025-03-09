@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTokens } from '@/lib/gmail/gmailClient';
 import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,10 +13,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/dashboard?error=No authorization code provided', request.url));
     }
     
-    // Create a Supabase client
+    // Create a Supabase client for server-side usage
+    const cookieStore = cookies();
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: false,
+        },
+        global: {
+          headers: {
+            Cookie: cookieStore.toString(),
+          },
+        },
+      }
     );
     
     // Get the current user
