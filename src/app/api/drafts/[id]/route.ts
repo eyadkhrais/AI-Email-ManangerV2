@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getUser } from '@/lib/auth';
 
-interface RouteContext {
-  params: { id: string }
-}
-
 export async function PUT(
   request: NextRequest,
-  { params }: RouteContext
+  { params }: { params: { id: string } }
 ) {
   try {
     // Get the authenticated user
