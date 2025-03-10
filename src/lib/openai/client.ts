@@ -1,12 +1,23 @@
 import OpenAI from 'openai';
 
-// Create an OpenAI client
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Check if we're in a build environment
+const isBuildTime = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production' && !process.env.OPENAI_API_KEY;
+
+// Create an OpenAI client only if we have an API key
+export const openai = !isBuildTime 
+  ? new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || 'dummy-key-for-build',
+    })
+  : null;
 
 // Generate embeddings for a text
 export const generateEmbedding = async (text: string) => {
+  // Skip API calls during build time
+  if (isBuildTime || !openai) {
+    console.log('Skipping OpenAI API call during build');
+    return [];
+  }
+
   const response = await openai.embeddings.create({
     model: 'text-embedding-3-small',
     input: text,
@@ -22,6 +33,12 @@ export const generateDraftReply = async (
   senderName: string,
   historicalEmails: any[]
 ) => {
+  // Skip API calls during build time
+  if (isBuildTime || !openai) {
+    console.log('Skipping OpenAI API call during build');
+    return "This is a placeholder response for build time.";
+  }
+
   // Prepare the context from historical emails
   let context = '';
   
