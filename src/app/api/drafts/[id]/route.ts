@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getUser } from '@/lib/auth';
 
+interface RouteContext {
+  params: { id: string }
+}
+
 export async function PUT(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: RouteContext
 ) {
   try {
     // Get the authenticated user
@@ -38,7 +42,7 @@ export async function PUT(
         body_html: body_html || `<p>${body_text.replace(/\n/g, '<br>')}</p>`,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', context.params.id)
+      .eq('id', params.id)
       .eq('user_id', user.id) // Ensure the draft belongs to the user
       .select()
       .single();
