@@ -56,8 +56,13 @@ export default function Login() {
 
     try {
       // Get the current origin for the redirect URL
-      const origin = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      if (!origin) {
+        throw new Error('Could not determine application URL');
+      }
+      
       const redirectUrl = `${origin}/auth/callback`;
+      console.log('Using redirect URL:', redirectUrl);
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
