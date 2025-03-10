@@ -15,8 +15,8 @@ export function createCookieOptions() {
 
   return {
     cookies: {
-      async get(name: string) {
-        const cookie = await cookieStore.get(name);
+      get(name: string) {
+        const cookie = cookieStore.get(name);
         return cookie?.value;
       },
       set(name: string, value: string, options: any = {}) {

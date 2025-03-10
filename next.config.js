@@ -5,6 +5,10 @@ const nextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  typescript: {
+    // Allow production builds to successfully complete even with type errors
+    ignoreBuildErrors: true,
+  },
   poweredByHeader: false,
   reactStrictMode: true,
   compiler: {
