@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getUser } from '@/lib/auth';
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest) {
   try {
+    // Extract the draft ID from the URL
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const id = pathParts[pathParts.length - 1];
+
     // Get the authenticated user
     const user = await getUser();
 
@@ -38,7 +40,7 @@ export async function PUT(
         body_html: body_html || `<p>${body_text.replace(/\n/g, '<br>')}</p>`,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .eq('user_id', user.id) // Ensure the draft belongs to the user
       .select()
       .single();
