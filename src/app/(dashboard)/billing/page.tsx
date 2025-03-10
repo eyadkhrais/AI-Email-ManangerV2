@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
@@ -20,7 +20,8 @@ interface Subscription {
   updated_at: string;
 }
 
-export default function Billing() {
+// Client component that uses useSearchParams
+function BillingWithSearchParams() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -249,25 +250,36 @@ export default function Billing() {
                     <span className="text-gray-600">Priority support</span>
                   </li>
                 </ul>
-                <div className="text-center">
-                  <span className="text-3xl font-bold text-gray-900">$9.99</span>
-                  <span className="text-gray-600">/month</span>
+                <div className="flex flex-col space-y-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-gray-500">$9.99/month</span>
+                  </div>
+                  <button
+                    onClick={handleSubscribe}
+                    disabled={subscribing}
+                    className="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {subscribing ? 'Processing...' : 'Subscribe Now'}
+                  </button>
                 </div>
-              </div>
-              
-              <div className="flex justify-center">
-                <button
-                  onClick={handleSubscribe}
-                  disabled={subscribing}
-                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {subscribing ? 'Processing...' : 'Subscribe Now'}
-                </button>
               </div>
             </div>
           )}
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrap with Suspense in the main component
+export default function Billing() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    }>
+      <BillingWithSearchParams />
+    </Suspense>
   );
 } 
